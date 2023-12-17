@@ -1,0 +1,28 @@
+{
+  // Use IntelliSense to learn about possible attributes.
+  // Hover to view descriptions of existing attributes.
+  // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Python: Current File",
+      "type": "python",
+      "request": "launch",
+      "program": "${file}",
+      "console": "integratedTerminal",
+      "justMyCode": false
+    },
+    {
+      "name": "ingest_soil_results",
+      "type": "python",
+      "request": "launch",
+      "program": "${file}",
+      "console": "integratedTerminal",
+      "justMyCode": false,
+      "args": [
+        "--file",
+        "C:\\Users\\happy\\Documents\\Obsidian Vault\\GrowBuddies_doc\\soil_science\\Soil Tests\\Results\\2023-11\\Margaret Johnson-Saturated Paste-20231114-167427.pdf"
+      ]
+    }
+  ]
+}
