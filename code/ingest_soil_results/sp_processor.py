@@ -1,5 +1,6 @@
 from base_processor import BaseProcessor
 from growbuddies_config import soil_results_config
+
 import pdfplumber
 
 
