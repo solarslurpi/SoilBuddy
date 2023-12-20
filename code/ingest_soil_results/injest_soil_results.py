@@ -1,13 +1,14 @@
 import argparse
 import glob
+import os
 from pdf_processor_factory import PDFProcessorFactory
-from growbuddies_config import OutputType
+from growbuddies_config import OutputType, soil_results_config
 
 # Argument Parser Setup
 parser = argparse.ArgumentParser(description="Soil Reports Processor")
 parser.add_argument("-f", "--file", type=str, help="Path to a single PDF file")
 parser.add_argument(
-    "-d", "--directory", type=str, help="Path to a directory containing PDF files"
+    "-d", "--subdir", type=str, help="Path to a directory under Results containing PDF files"
 )
 
 # Parse the arguments
@@ -26,8 +27,10 @@ def process_file(file_path):
 def main():
     if args.file:
         process_file(args.file)
-    elif args.directory:
-        pdf_files = glob.glob(args.directory + "/*.pdf")
+    elif args.subdir:
+        directory = soil_results_config.get("directory")
+        directory = os.path.join(directory, args.subdir)
+        pdf_files = glob.glob(directory + "/*.pdf")
         for pdf_file in pdf_files:
             process_file(pdf_file)
     else:

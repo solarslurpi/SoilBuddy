@@ -13,54 +13,40 @@ class SPProcessor(BaseProcessor):
     def process_pdf(self, pdf_file: str, output_setting: str) -> None:
         with pdfplumber.open(pdf_file) as pdf:
             table = pdf.pages[0].extract_table()
-        # As we process the pdfs, we put field names and values into this list.
-        field_names = []
+        field_names, values = self._parse_header(table,8,3)
+        all_field_names = []
+        all_values = []
+        all_field_names.extend(field_names)
+        all_values.extend(values)
+        field_names, values = self._parse_midsection(table,8,18)
+        all_field_names.extend(field_names)
+        all_values.extend(values)
+        field_names, values = self._parse_bottom(table,3,18)
+        all_field_names.extend(field_names)
+        all_values.extend(values)
+        df = self._build_dataFrame(all_field_names, all_values, pdf_file)
+        self._store_pdf("SP", df, pdf_file, output_setting)
+
+
+    def _parse_midsection(self, table, start_row, end_row):
         values = []
-        # Reset the current field name for the new logic
-        current_field_name = None
-        # Iterate over each row in the data
-        for i, row in enumerate(table):
+        field_names = []
+        for row in table[8:18]:
+            # Initialize field_name, value, and unit for each row
             field_name, value, unit = None, None, None
-
-            # As of 2023, the first 8 rows of the Saturated Paste Report has
-            # Col 1 = Name, Col 2 = Value. 
-            if i < 8:
-                field_name = row[0]
-                if field_name in soil_results_config.get("readings_to_exclude"):
-                    continue
-                value = row[3]
-            # As of 2023, the pink area is row 9 18 is the pink (anion/cation) sectopm/
-            elif i >= 8 and i < 18:
-                # On to the anions and cations sections (pink on the PDF table)
-                if row[1]: # if no row[1], then meq/l...
-                    current_field_name = row[1]  # Update the current field name
-                field_name = current_field_name
-                unit = row[2]
-                value = (
-                    row[3] if row[3] else None
-                )  # Take the value from the fourth column
-
-                field_name += f" ({unit.strip()})"
-            # As of 2023, i = 18 through 21 are the $ of CA : MG: K : NA
-            elif i >= 18 and i < 22:
-                field_name = row[1]
-                unit =  "%"
-                field_name += f" ({unit.strip()})"
-                value = (row[3] if row[3] else None )
-            elif i >= 22: # on to the trace elements...
-                field_name = row[1]
-                value = (row[3] if row[3] else None )
-            # If there is a field name and a value, add them to the processed data
-            if field_name and value:
-                # Get rid of potentical commas (,) in the values.
-                value = value.replace(",", "")
+            unit = row[2]   
+            # Check if there's a new field name in the current row
+            if row[1]:  # If row[1] is not empty, update the current field name
+                current_field_name = row[1]
+                # When no row[1], it is the meq/L measurement.
+            field_name = f"{current_field_name} ({unit.strip()})" if unit else current_field_name
+            # Assign the value from the fourth column, if available
+            value = row[3] if row[3] else None
+            if field_name and value is not None:
                 mapped_field_name = soil_results_config.get("name_mapping").get(field_name, field_name)
                 values.append(value)
                 field_names.append(mapped_field_name)
-                    
-
-        df = self._build_dataFrame(field_names, values, pdf_file)
-        self._store_pdf("SP", df, pdf_file, output_setting)
+        return field_names, values
 
     @property
     def measurement_name(self):

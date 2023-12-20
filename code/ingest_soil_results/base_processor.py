@@ -34,7 +34,7 @@ class BaseProcessor(ABC):
         if output_setting == OutputType.MARKDOWN or output_setting == OutputType.BOTH:
             # Write the file out to the same directory as the location of pdf file.
             directory = os.path.dirname(pdf_file)
-            self._write_markdown(directory, line_protocol)
+            self._write_obsidian_page(directory, line_protocol)
 
     def _get_pdf_files(self, pdf_dir_or_file):
         return (
@@ -67,28 +67,38 @@ class BaseProcessor(ABC):
             iso_date_str = datetime.now().isoformat()
         return iso_date_str
 
-    def _convert_to_float(self, value_list) -> list:
-        float_values = []
+    def _convert_float_strs_to_float(self, value_list) -> list:
+        values = []
         for item in value_list:
-            # Check if item is a string and starts with '>'
-            if isinstance(item, str) and item.startswith((">", "<")):
+            # Remove commas from strings that are numbers with commas in them.
+            item = item.replace(',','')
+            if item.startswith((">", "<")):
                 # Remove and convert to float
-                float_values.append(float(item[1:]))
+                values.append(float(item[1:]))
             # Check if the item is an integer or a float or a string that can be converted to a float
-            elif isinstance(item, (int, float)) or (
-                isinstance(item, str) and item.replace(".", "", 1).isdigit()
-            ):
-                float_values.append(float(item))
-            # If it's an empty string or any other case, you may choose to append a NaN or 0
+            elif self.is_numeric_string(item):
+                values.append(float(item))
+            # If it's an empty string or any other case, you may choose titemo append a NaN or 0
             else:
-                float_values.append(float("nan"))
-        return float_values
+                values.append(item)
+        return values
 
+    def is_numeric_string(self, item):
+        """
+        Check if the item is an integer, a float, or a string that contains only digits and/or periods
+        """
+        if isinstance(item, (int, float)):
+            return True
+        elif isinstance(item, str):
+            return all(char.isdigit() or char == '.' for char in item)
+        else:
+            return False 
+        
     def _build_dataFrame(
         self, field_names: list, values: list, pdf_file: str
     ) -> pd.DataFrame:
-        float_values = self._convert_to_float(values)
-        return pd.DataFrame([float_values], columns=field_names)
+        values = self._convert_float_strs_to_float(values)
+        return pd.DataFrame([values], columns=field_names)
 
     def _build_influx_row(
         self, measurement_name: str, df: pd.DataFrame, timestamp_ns: int
@@ -97,6 +107,43 @@ class BaseProcessor(ABC):
         fields = ",".join([f"{key}={value}" for key, value in data.items()])
         line_protocol = f"{measurement_name} {fields} {timestamp_ns}"
         return line_protocol
+
+    def _parse_header(self, table, nRows, value_row):
+        values = []
+        field_names = []
+
+        for i, row in enumerate(table):
+            # Break if the specified number of rows is reached
+            if i >= nRows:
+                break
+
+            field_name = row[0].strip() if row[0] else None
+            # Exclude certain fields based on configuration
+            if not field_name or field_name in soil_results_config.get("readings_to_exclude", []):
+                continue
+
+            # Clean and validate value
+            value = row[value_row]
+
+            # Map field names and accumulate values if valid
+            if field_name and value is not None:
+                mapped_field_name = soil_results_config.get("name_mapping").get(field_name, field_name)
+                values.append(value)
+                field_names.append(mapped_field_name)
+
+        return field_names, values
+
+    def _parse_bottom(self, table, value_col, row_begin):
+        values = []
+        field_names = []
+        for row in table[row_begin:]:
+            field_name = row[1]
+            value = (row[value_col] if row[value_col] else None )
+            if field_name and value is not None:
+                mapped_field_name = soil_results_config.get("name_mapping").get(field_name, field_name)
+                values.append(value)
+                field_names.append(mapped_field_name)
+        return field_names, values
 
     def _write_row(self, line_protocol: str) -> None:
         # Create a UDP socket
@@ -114,32 +161,39 @@ class BaseProcessor(ABC):
         finally:
             sock.close()
 
-    def _write_markdown(self, directory: str, content: str) -> None:
+    def _write_obsidian_page(self, directory: str, content: str) -> None:
         # Split the content into individual test results
         # Extract the measurement name and date
-        measurement_mapping = {"SP": "Saturated Paste", "M3": "Mehlich 3"}
+        # measurement_mapping = {"SP": "Saturated Paste", "M3": "Mehlich 3"}
         raw_measurement_name = content.split(" ")[0]
-        measurement_name = measurement_mapping.get(
-            raw_measurement_name, raw_measurement_name
-        )  # Default to raw name if not found in mapping
+        # measurement_name = measurement_mapping.get(
+        #     raw_measurement_name, raw_measurement_name
+        # )  # Default to raw name if not found in mapping
         date = re.search(r"\d{4}-\d{2}-\d{2}", content).group()
         filename = os.path.join(directory, f"{raw_measurement_name}_{date}.md")
         # Create a Markdown table header with measurement name and date
-        markdown_table = f"## {measurement_name} Measurement Results ({date})\n\n"
-        markdown_table += "| Test | Result | Unit |\n"
-        markdown_table += "|------|--------|------|\n"
+        properties = f"---\ntags: {raw_measurement_name}\n"
+        properties += f"date: {date}\n"
 
         # Process each test result
-        test_results = content.split(",")[1:-1]  # Exclude the measurement name and date
+        # Splitting the content string into parts
+        # Splitting the content string into parts
+        parts = content.split(',')
+        # remove date from parts.
+        parts[-1] = parts[-1].split(' ',1)[0]
+        # Extracting and removing the date from the last part
+        # date_part = parts[-1].split(' ')[-1]
+        # parts[-1] = parts[-1].replace(' ' + date_part, '')
+
+        # # Adjusting the first element to remove the measurement abbreviation (M3 or SP).
+        # parts[0] = parts[0].replace(raw_measurement_name, '')
+        test_results = parts
         for result in test_results:
             test, value = result.split("=")
-            test = test.replace("_", " ")
-            unit = ""
-            if "(" in test and ")" in test:
-                unit = test[test.find("(") + 1 : test.find(")")]
-                test = test[: test.find("(")].strip()
-            markdown_table += f"| {test} | {value} | {unit} |\n"
-
+            if raw_measurement_name in test:
+                test = test.replace(raw_measurement_name + ' ', '')
+            properties += f"{test} : {value} \n"
+        properties += "---\n"
         # Output (or save) the markdown table
         with open(filename, "w") as file:
-            file.write(markdown_table)
+            file.write(properties)

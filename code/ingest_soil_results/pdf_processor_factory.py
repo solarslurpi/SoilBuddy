@@ -1,5 +1,6 @@
 import pdfplumber
 from sp_processor import SPProcessor
+from m3_processor import M3Processor
 # from m3_processor import M3Processor
 
 
@@ -17,4 +18,4 @@ class PDFProcessorFactory:
         if not isM3:
             return SPProcessor()
         else:
-            pass  # TODO: M3Processor...
+            return M3Processor()
