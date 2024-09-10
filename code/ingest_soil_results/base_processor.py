@@ -23,18 +23,15 @@ class BaseProcessor(ABC):
         pass
 
     @abstractmethod
-    def process_pdf(self, pdf_file: str, output_setting: OutputType) -> None:
+    def process_pdf(self, pdf_file: str) -> None:
         pass
 
-    def _store_pdf(self, measurement_name, df, pdf_file, output_setting) -> None:
+    def _store_markdown_file(self, measurement_name, df, pdf_file) -> None:
         timestamp_ns = self._extract_timestamp_from_pdf(pdf_file)
-        line_protocol = self._build_influx_row(measurement_name, df, timestamp_ns)
-        if output_setting == OutputType.INFLUXDB or output_setting == OutputType.BOTH:
-            self._write_row(line_protocol)
-        if output_setting == OutputType.MARKDOWN or output_setting == OutputType.BOTH:
-            # Write the file out to the same directory as the location of pdf file.
-            directory = os.path.dirname(pdf_file)
-            self._write_obsidian_page(directory, line_protocol)
+        yaml_content = self._build_yaml_content(measurement_name, df, timestamp_ns)
+        # Write the file out to the same directory as the location of pdf file.
+        directory = os.path.dirname(pdf_file)
+        self._write_obsidian_page(directory, yaml_content)
 
     def _get_pdf_files(self, pdf_dir_or_file):
         return (
@@ -92,15 +89,15 @@ class BaseProcessor(ABC):
         elif isinstance(item, str):
             return all(char.isdigit() or char == '.' for char in item)
         else:
-            return False 
-        
+            return False
+
     def _build_dataFrame(
         self, field_names: list, values: list, pdf_file: str
     ) -> pd.DataFrame:
         values = self._convert_float_strs_to_float(values)
         return pd.DataFrame([values], columns=field_names)
 
-    def _build_influx_row(
+    def _build_yaml_content(
         self, measurement_name: str, df: pd.DataFrame, timestamp_ns: int
     ) -> str:
         data = df.iloc[0]
@@ -170,13 +167,18 @@ class BaseProcessor(ABC):
         #     raw_measurement_name, raw_measurement_name
         # )  # Default to raw name if not found in mapping
         date = re.search(r"\d{4}-\d{2}-\d{2}", content).group()
-        filename = os.path.join(directory, f"{raw_measurement_name}_{date}.md")
+        if raw_measurement_name == "M3":
+            test_name = "Mehlic-3"
+        elif raw_measurement_name == "SP":
+            test_name = "Saturated_Paste"
+        else:
+            test_name = raw_measurement_name
+        filename = os.path.join(directory, f"{test_name}_{date}.md")
         # Create a Markdown table header with measurement name and date
-        properties = f"---\ntags: {raw_measurement_name}\n"
+        properties = f"---\ntags: {raw_measurement_name} {test_name} soil_test\n"
         properties += f"date: {date}\n"
 
         # Process each test result
-        # Splitting the content string into parts
         # Splitting the content string into parts
         parts = content.split(',')
         # remove date from parts.

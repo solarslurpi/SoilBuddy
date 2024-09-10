@@ -25,7 +25,7 @@ class SPProcessor(BaseProcessor):
         all_field_names.extend(field_names)
         all_values.extend(values)
         df = self._build_dataFrame(all_field_names, all_values, pdf_file)
-        self._store_pdf("SP", df, pdf_file, output_setting)
+        self._store_markdown_file("SP", df, pdf_file)
 
 
     def _parse_midsection(self, table, start_row, end_row):
@@ -34,7 +34,7 @@ class SPProcessor(BaseProcessor):
         for row in table[8:18]:
             # Initialize field_name, value, and unit for each row
             field_name, value, unit = None, None, None
-            unit = row[2]   
+            unit = row[2]
             # Check if there's a new field name in the current row
             if row[1]:  # If row[1] is not empty, update the current field name
                 current_field_name = row[1]

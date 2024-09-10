@@ -29,7 +29,7 @@ class M3Processor(BaseProcessor):
         all_field_names.extend(field_names)
 
         df = self._build_dataFrame(all_field_names, all_values, pdf_file)
-        self._store_pdf("M3", df, pdf_file, output_setting)
+        self._store_markdown_file("M3", df, pdf_file)
 
     @property
     def measurement_name(self):
